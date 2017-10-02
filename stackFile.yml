@@ -1,0 +1,149 @@
+version: '1.0'
+services:
+  - name: db
+    type: mariadb
+    version: 10.3
+    configuration: MasterSlave
+    username: wordpress
+    # Ask password on create
+    userPassword: null
+    password: null
+    ports:
+      - 3306
+    remoteAccess: false
+    deployTo:
+      - mainOne
+      - mainTwo
+
+  - name: cache
+    type: redis
+    version: 3.2
+    remoteAccess: false
+    ports:
+      - 6379
+    deployTo:
+      - edge
+
+  - name: blog
+    type: php
+    version: 7.1
+    source:
+      type: download
+      url: https://wordpress.org/wordpress-4.7.6.zip
+    extensions:
+      - mysqli
+      - opcache
+      - gd
+      - zip
+    pecl:
+      - redis
+    volumes:
+      - directory: $MAIN_PATH/wp-content/uploads
+        sync: true
+      - directory: $MAIN_PATH/wp-content/plugins
+        sync: true
+    configFiles:
+      - dest: $MAIN_PATH/wp-config.php
+        src: ./configs/wp-config.php
+      - dest: $MAIN_PATH/db-config.php
+        src: ./configs/db-config.php
+      - dest: $MAIN_PATH/wp-content/db.php
+        src: ./configs/db.php
+    globalDeps: |
+      apt-get install less mysql-client
+      curl https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
+      chmod +x /usr/local/bin/wp
+      echo 'alias wp="wp --allow-root"' >> ~/.bashrc
+    deployTo:
+      - mainOne
+      - mainTwo
+
+  - name: cluster
+    type: nginxCluster
+    version: 1.13
+    ports:
+      - 80
+      - 443
+    remoteAccess: false
+    serviceFiles:
+      - name: blog
+        static: true
+    deployTo:
+      - mainOne
+      - mainTwo
+
+  - name: balancer
+    type: haproxy
+    version: 1.7
+    ports:
+      - 80
+      - 443
+    remoteAccess: false
+    serviceFiles:
+      - name: cluster
+    deployTo:
+      - edge
+
+  - name: varnish
+    type: docker
+    image: debian
+    version: jessie
+    ports:
+      - 80
+    remoteAccess: false
+    configFiles:
+      - dest: /etc/varnish/default.vcl
+        src: ./configs/default.vcl
+    globalDeps: |
+      apt-get install wget
+      wget -qO- https://packagecloud.io/install/repositories/varnishcache/varnish51/script.deb.sh | bash
+      apt-get install varnish
+    startCommand: varnishd -j unix,user=vcache -F -f /etc/varnish/default.vcl -s malloc,100m -a 0.0.0.0:80
+    deployTo:
+      - edge
+
+  - name: pma
+    type: php
+    version: 7.1
+    source:
+      type: git
+      url: https://github.com/phpmyadmin/phpmyadmin
+    extensions:
+      - mysqli
+      - opcache
+    configFiles:
+      - dest: $MAIN_PATH/config.inc.php
+        src: ./configs/config.inc.php
+    localDeps: composer install
+    deployTo:
+      - edge
+
+  - name: web
+    type: nginx
+    version: 1.13
+    ports:
+      - 80
+      - 443
+    remoteAccess: true
+    serviceFiles:
+      - name: pma
+        static: true
+      - name: varnish
+    deployTo:
+      - edge
+
+hosts:
+  - name: mainOne
+    requirements:
+      cores: 1
+      memory: 1
+
+  - name: mainTwo
+    requirements:
+      cores: 1
+      memory: 1
+
+  - name: edge
+    requirements:
+      cores: 1
+      memory: 1
