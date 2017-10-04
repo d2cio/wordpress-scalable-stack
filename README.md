@@ -9,6 +9,7 @@
 4. Click **Create hosts and services**
 
 
-Minimal recommended requirements: 
+Minimal recommended requirements:
 
-3 hosts with 1GB RAM
+- 2 hosts with 2GB RAM
+- 1 host with 1GB RAM

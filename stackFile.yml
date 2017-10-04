@@ -136,12 +136,12 @@ hosts:
   - name: mainOne
     requirements:
       cores: 1
-      memory: 1
+      memory: 2
 
   - name: mainTwo
     requirements:
       cores: 1
-      memory: 1
+      memory: 2
 
   - name: edge
     requirements:
