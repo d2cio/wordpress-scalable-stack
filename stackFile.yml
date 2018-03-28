@@ -11,13 +11,15 @@ services:
     ports:
       - 3306
     remoteAccess: false
+    comments:
+      username: Database will be created with the same name
     deployTo:
       - mainOne
       - mainTwo
 
   - name: cache
     type: redis
-    version: 3.2
+    version: 4.0
     remoteAccess: false
     ports:
       - 6379
@@ -29,7 +31,7 @@ services:
     version: 7.1
     source:
       type: download
-      url: https://wordpress.org/wordpress-4.7.6.zip
+      url: https://wordpress.org/wordpress-4.9.4.zip
     extensions:
       - mysqli
       - opcache
@@ -41,6 +43,8 @@ services:
       - directory: $MAIN_PATH/wp-content/uploads
         sync: true
       - directory: $MAIN_PATH/wp-content/plugins
+        sync: true
+      - directory: $MAIN_PATH/wp-content/themes
         sync: true
     configFiles:
       - dest: $MAIN_PATH/wp-config.php
@@ -54,6 +58,26 @@ services:
       curl https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
       chmod +x /usr/local/bin/wp
       echo 'alias wp="wp --allow-root"' >> ~/.bashrc
+      cp -r $MAIN_PATH/wp-content/themes ~/themes
+    localDeps: cp -r ~/themes/* $MAIN_PATH/wp-content/themes/
+    initialCommands: |
+      cd $MAIN_PATH
+      wp core install --url=$WP_URL --title="$WP_TITLE" --admin_user=$WP_ADMIN_USERNAME --admin_password=$WP_ADMIN_PASSWORD --admin_email=$WP_ADMIN_EMAIL
+      wp plugin install varnish-http-purge --activate
+      wp plugin install redis-cache --activate
+      wp redis enable
+    env:
+      WP_URL: "{{=service('varnish').getNginxDomain()}}"
+      WP_TITLE: null
+      WP_ADMIN_USERNAME: null
+      WP_ADMIN_PASSWORD: null
+      WP_ADMIN_EMAIL: null
+    comments:
+      env:
+        WP_TITLE: The title of your Wordpress website
+        WP_ADMIN_USERNAME: Username of administrator account
+        WP_ADMIN_PASSWORD: Password of administrator account
+        WP_ADMIN_EMAIL: Email of administrator account
     deployTo:
       - mainOne
       - mainTwo
@@ -74,31 +98,27 @@ services:
 
   - name: balancer
     type: haproxy
-    version: 1.7
+    version: latest
     ports:
       - 80
       - 443
     remoteAccess: false
     serviceFiles:
       - name: cluster
+        sticky: true
     deployTo:
       - edge
 
   - name: varnish
     type: docker
-    image: debian
-    version: jessie
+    image: d2cio/varnish
+    version: 6.0
     ports:
       - 80
     remoteAccess: false
     configFiles:
       - dest: /etc/varnish/default.vcl
         src: ./configs/default.vcl
-    globalDeps: |
-      apt-get install wget
-      wget -qO- https://packagecloud.io/install/repositories/varnishcache/varnish51/script.deb.sh | bash
-      apt-get install varnish
-    startCommand: varnishd -j unix,user=vcache -F -f /etc/varnish/default.vcl -s malloc,100m -a 0.0.0.0:80
     deployTo:
       - edge
 

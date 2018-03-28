@@ -16,10 +16,24 @@ define('DB_SLAVE', '{{=service('db').getSlaveAlias()}}');
 /** Database Charset to use in creating database tables. */
 define('DB_CHARSET', 'utf8');
 
+$protocol = 'http://';
 /** Allow using HTTPS */
-if ($_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') {
+if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') {
    $_SERVER['HTTPS']='on';
+   $protocol = 'https://';
 }
+
+/** Allowing using any domain */
+if (isset($_SERVER['HTTP_HOST'])) {
+  define('WP_SITEURL', $protocol . $_SERVER['HTTP_HOST']);
+  define('WP_HOME', $protocol . $_SERVER['HTTP_HOST']);
+}
+
+/** Define Redis host */
+define('WP_REDIS_HOST', '{{=service('cache').getAppAlias()}}');
+
+/** Switching to real cron */
+define('DISABLE_WP_CRON', true);
 
 /** Allow install plugins directly (without FTP) */
 define('FS_METHOD', 'direct');
