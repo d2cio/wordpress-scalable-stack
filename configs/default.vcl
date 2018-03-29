@@ -18,7 +18,9 @@ sub vcl_recv {
 }
 
 acl purge {
-    "{{=service('balancer').getAppAlias()}}";
+    "172.16.0.0/16";
+    "127.0.0.1";
+    "localhost";
 }
 
 # Regex purging
