@@ -4,8 +4,12 @@ import directors;
 import std;
 
 backend default {
-    .host = "{{=service('balancer').getAppAlias()}}";
-    .port = "{{=service('balancer').getMainPort()}}";
+  .host = "{{=service('balancer').getAppAlias()}}";
+  .port = "{{=service('balancer').getMainPort()}}";
+  .max_connections = 800;          # That's it
+  .first_byte_timeout = 300s;      # How long to wait before we receive a first byte from our backend?
+  .connect_timeout = 300s;         # How long to wait for a backend connection?
+  .between_bytes_timeout = 300s;   # How long to wait between bytes received from our backend?
 }
 
 sub vcl_init {
@@ -128,48 +132,104 @@ sub vcl_deliver {
 
 ### WordPress-specific config ###
 sub vcl_recv {
-    # pipe on weird http methods
-    if (req.method !~ "^GET|HEAD|PUT|POST|TRACE|OPTIONS|DELETE$") {
-        return(pipe);
-    }
+  if (req.method !~ "^GET|HEAD|PUT|POST|TRACE|OPTIONS|DELETE$") {
+    return(pipe);
+  }
+  # TURN OFF CACHE when needed (just uncomment this only when needed)
+  # return(pass);
+  
+  ### Do not Cache: special cases
+  # don't cache ajax requests
+  if (req.http.X-Requested-With == "XMLHttpRequest") {
+    set req.http.X-VC-Cacheable = "NO:Requested with: XMLHttpRequest";
+    return(pass);
+  }
 
-    ### Check for reasons to bypass the cache!
-    # never cache anything except GET/HEAD
-    if (req.method != "GET" && req.method != "HEAD") {
-        set req.http.X-VC-Cacheable = "NO:Request method:" + req.method;
-        return(pass);
-    }
+  # don't cache logged-in users. you can set users `logged in cookie` name in settings
+  if (req.http.Cookie ~ "wordpress_logged_in_") {
+      set req.http.X-VC-Cacheable = "NO:Found logged in cookie";
+      return(pass);
+  }
 
-    # don't cache logged-in users. you can set users `logged in cookie` name in settings
-    if (req.http.Cookie ~ "wordpress_logged_in_") {
-        set req.http.X-VC-Cacheable = "NO:Found logged in cookie";
-        return(pass);
-    }
+  ### looks like we might actually cache it!
+  # fix up the request
+  set req.url = regsub(req.url, "\?replytocom=.*$", "");
 
-    # don't cache ajax requests
-    if (req.http.X-Requested-With == "XMLHttpRequest") {
-        set req.http.X-VC-Cacheable = "NO:Requested with: XMLHttpRequest";
-        return(pass);
-    }
+  # never cache anything except GET/HEAD
+  if (req.method != "GET" && req.method != "HEAD") {
+    set req.http.X-VC-Cacheable = "NO:Request method:" + req.method;
+    return(pass);
+  }
 
-    # don't cache these special pages. Not needed, left here as example
-    #if (req.url ~ "nocache|wp-admin|wp-(comments-post|login|activate|mail)\.php|bb-admin|server-status|control\.php|bb-login\.php|bb-reset-password\.php|register\.php") {
-    #    set req.http.X-VC-Cacheable = "NO:Special page: " + req.url;
-    #    return(pass);
-    #}
+  # Don't cache feed
+  if (req.url ~ "/feed") {
+    return (pass);
+  }
 
-    ### looks like we might actually cache it!
-    # fix up the request
-    set req.url = regsub(req.url, "\?replytocom=.*$", "");
+  if (req.url ~ "/wp-cron.php" || req.url ~ "preview=true") {
+    return (pass);
+  }
 
-    # Remove has_js, Google Analytics __*, and wooTracker cookies.
-    set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(__[a-z]+|has_js|wooTracker)=[^;]*", "");
-    set req.http.Cookie = regsub(req.http.Cookie, "^;\s*", "");
-    if (req.http.Cookie ~ "^\s*$") {
-        unset req.http.Cookie;
-    }
+  # Woocommerce
+  if (req.url ~ "(cart|my-account|checkout|addons)") {
+    return (pass);
+  }
+  if ( req.url ~ "\?add-to-cart=" ) {
+    return (pass);
+  }
 
-    return(hash);
+  # Remove any Google Analytics based cookies
+  set req.http.Cookie = regsuball(req.http.Cookie, "__utm.=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "_ga=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "utmctr=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "utmcmd.=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "utmccn.=[^;]+(; )?", "");
+
+  # Remove the Quant Capital cookies (added by some plugin, all __qca)
+  set req.http.Cookie = regsuball(req.http.Cookie, "__qc.=[^;]+(; )?", "");
+
+  # Remove the wp-settings cookie
+  set req.http.Cookie = regsuball(req.http.Cookie, "wp-settings-\d+=[^;]+(; )?", "");
+  
+  # Remove the wp-settings-time cookie
+  set req.http.Cookie = regsuball(req.http.Cookie, "wp-settings-time-\d+=[^;]+(; )?", "");
+  
+  # Remove the wp test cookie
+  set req.http.Cookie = regsuball(req.http.Cookie, "wordpress_test_cookie=[^;]+(; )?", "");
+
+  # Remove has_js and Cloudflare/Google Analytics __* cookies.
+  set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(_[_a-z]+|has_js)=[^;]*", "");
+  
+  # Remove a ";" prefix, if present.
+  set req.http.Cookie = regsub(req.http.Cookie, "^;\s*", "");
+  
+  # Remove the cloudflare cookie
+  set req.http.Cookie = regsuball(req.http.Cookie, "__cfduid=[^;]+(; )?", "");
+
+  # Remove the PHPSESSID in members area cookie
+  set req.http.Cookie = regsuball(req.http.Cookie, "PHPSESSID=[^;]+(; )?", "");
+
+  # Remove DoubleClick offensive cookies
+  set req.http.Cookie = regsuball(req.http.Cookie, "__gads=[^;]+(; )?", "");
+
+  # Remove the AddThis cookies
+  set req.http.Cookie = regsuball(req.http.Cookie, "__atuv.=[^;]+(; )?", "");
+
+  # Are there cookies left with only spaces or that are empty?
+  if (req.http.Cookie ~ "^\s*$") {
+    unset req.http.Cookie;
+  }
+
+  # Normalize the query arguments.
+  # Note: Placing this above the "do not cache" section breaks some WP theme elements and admin functionality.
+  set req.url = std.querysort(req.url);
+
+  if( req.url ~ "^/$" ) {
+    return (hash);
+  }
+
+  # Cache all others requests.
+  return (hash);
 }
 
 sub vcl_hash {
@@ -179,11 +239,6 @@ sub vcl_hash {
     } else {
         set req.http.hash = req.http.hash + "#" + server.ip;
     }
-    # Add the browser cookie only if cookie found. Not needed, left here as example
-    #if (req.http.Cookie ~ "wp-postpass_|wordpress_logged_in_|comment_author|PHPSESSID") {
-    #    hash_data(req.http.Cookie);
-    #    set req.http.hash = req.http.hash + "#" + req.http.Cookie;
-    #}
 }
 
 sub vcl_backend_response {
