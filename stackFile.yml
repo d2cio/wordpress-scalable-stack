@@ -41,11 +41,7 @@ services:
     pecl:
       - redis
     volumes:
-      - directory: $MAIN_PATH/wp-content/uploads
-        sync: true
-      - directory: $MAIN_PATH/wp-content/plugins
-        sync: true
-      - directory: $MAIN_PATH/wp-content/themes
+      - directory: $MAIN_PATH/wp-content
         sync: true
     configFiles:
       - dest: $MAIN_PATH/wp-config.php
@@ -59,16 +55,15 @@ services:
       curl https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar -o /usr/local/bin/wp
       chmod +x /usr/local/bin/wp
       echo 'alias wp="wp --allow-root"' >> ~/.bashrc
-      cp -r $MAIN_PATH/wp-content/themes ~/themes
-    localDeps: cp -r ~/themes/* $MAIN_PATH/wp-content/themes/
+      cp -r $MAIN_PATH/wp-content /var/www/wp-content-tmp
+    localDeps: cp -r /var/www/wp-content-tmp/* $MAIN_PATH/wp-content
     initialCommands: |
       cd $MAIN_PATH
-      wp core install --url=$WP_URL --title="$WP_TITLE" --admin_user=$WP_ADMIN_USERNAME --admin_password=$WP_ADMIN_PASSWORD --admin_email=$WP_ADMIN_EMAIL
+      wp core install --url={{=service('varnish').getNginxDomain()}} --title="$WP_TITLE" --admin_user=$WP_ADMIN_USERNAME --admin_password=$WP_ADMIN_PASSWORD --admin_email=$WP_ADMIN_EMAIL
       wp plugin install varnish-http-purge --activate
       wp plugin install redis-cache --activate
       wp redis enable
     env:
-      WP_URL: "{{=service('varnish').getNginxDomain()}}"
       WP_TITLE: null
       WP_ADMIN_USERNAME: null
       WP_ADMIN_PASSWORD: null
@@ -85,7 +80,7 @@ services:
 
   - name: cluster
     type: nginxCluster
-    version: 1.13
+    version: 1.14
     ports:
       - 80
       - 443
@@ -142,7 +137,7 @@ services:
 
   - name: web
     type: nginx
-    version: 1.13
+    version: 1.15
     ports:
       - 80
       - 443
