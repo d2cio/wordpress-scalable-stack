@@ -31,12 +31,13 @@ services:
     version: 7.1
     source:
       type: download
-      url: https://wordpress.org/wordpress-4.9.4.zip
+      url: https://wordpress.org/latest.zip
     extensions:
       - mysqli
       - opcache
       - gd
       - zip
+      - soap
     pecl:
       - redis
     volumes:
