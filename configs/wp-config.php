@@ -1,7 +1,7 @@
 <?php
 // ** MySQL settings - You can get this info from your web host ** //
 /** The name of the database for WordPress */
-define('DB_NAME', '{{=service('db').get('username')}}');
+define('DB_NAME', '{{=service('db').get('database')}}');
 
 /** MySQL database username */
 define('DB_USER', '{{=service('db').get('username')}}');
