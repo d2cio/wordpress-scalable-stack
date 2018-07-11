@@ -4,6 +4,7 @@ services:
     type: mariadb
     version: 10.3
     configuration: MasterSlave
+    database: wordpress
     username: wordpress
     # Ask password on create
     userPassword: null
