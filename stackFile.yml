@@ -15,8 +15,8 @@ services:
     comments:
       username: Database will be created with the same name
     deployTo:
-      - mainOne
-      - mainTwo
+      - main-one
+      - main-two
 
   - name: cache
     type: redis
@@ -76,12 +76,12 @@ services:
         WP_ADMIN_PASSWORD: Password of administrator account
         WP_ADMIN_EMAIL: Email of administrator account
     deployTo:
-      - mainOne
-      - mainTwo
+      - main-one
+      - main-two
 
   - name: cluster
     type: nginxCluster
-    version: 1.14
+    version: 1.15
     ports:
       - 80
       - 443
@@ -90,8 +90,8 @@ services:
       - name: blog
         static: true
     deployTo:
-      - mainOne
-      - mainTwo
+      - main-one
+      - main-two
 
   - name: balancer
     type: haproxy
@@ -151,12 +151,12 @@ services:
       - edge
 
 hosts:
-  - name: mainOne
+  - name: main-one
     requirements:
       cores: 1
       memory: 2
 
-  - name: mainTwo
+  - name: main-two
     requirements:
       cores: 1
       memory: 2
