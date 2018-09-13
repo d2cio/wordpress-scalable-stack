@@ -59,6 +59,7 @@ services:
       cp -r $MAIN_PATH/wp-content /var/www/wp-content-tmp
     localDeps: cp -r /var/www/wp-content-tmp/* $MAIN_PATH/wp-content
     initialCommands: |
+      . ~/.bashrc
       cd $MAIN_PATH
       wp core install --url={{=service('varnish').getNginxDomain()}} --title="$WP_TITLE" --admin_user=$WP_ADMIN_USERNAME --admin_password=$WP_ADMIN_PASSWORD --admin_email=$WP_ADMIN_EMAIL
       wp plugin install varnish-http-purge --activate
