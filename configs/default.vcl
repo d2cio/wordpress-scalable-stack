@@ -17,10 +17,6 @@ sub vcl_init {
     backends.add_backend(default);
 }
 
-sub vcl_recv {
-    set req.backend_hint = backends.backend();
-}
-
 acl purge {
     "172.16.0.0/16";
     "127.0.0.1";
@@ -60,6 +56,7 @@ sub purge_page {
 # always set the X-VC-Purge-Method header.
 
 sub vcl_recv {
+    set req.backend_hint = backends.backend();
     set req.http.X-VC-My-Purge-Key = "";
     if (req.method == "PURGE") {
         if (req.http.X-VC-Purge-Key == req.http.X-VC-My-Purge-Key) {
@@ -137,7 +134,7 @@ sub vcl_recv {
   }
   # TURN OFF CACHE when needed (just uncomment this only when needed)
   # return(pass);
-  
+
   ### Do not Cache: special cases
   # don't cache ajax requests
   if (req.http.X-Requested-With == "XMLHttpRequest") {
@@ -181,6 +178,8 @@ sub vcl_recv {
   # Remove any Google Analytics based cookies
   set req.http.Cookie = regsuball(req.http.Cookie, "__utm.=[^;]+(; )?", "");
   set req.http.Cookie = regsuball(req.http.Cookie, "_ga=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "_gat=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "_gid=[^;]+(; )?", "");
   set req.http.Cookie = regsuball(req.http.Cookie, "utmctr=[^;]+(; )?", "");
   set req.http.Cookie = regsuball(req.http.Cookie, "utmcmd.=[^;]+(; )?", "");
   set req.http.Cookie = regsuball(req.http.Cookie, "utmccn.=[^;]+(; )?", "");
@@ -190,19 +189,30 @@ sub vcl_recv {
 
   # Remove the wp-settings cookie
   set req.http.Cookie = regsuball(req.http.Cookie, "wp-settings-\d+=[^;]+(; )?", "");
-  
+
   # Remove the wp-settings-time cookie
   set req.http.Cookie = regsuball(req.http.Cookie, "wp-settings-time-\d+=[^;]+(; )?", "");
-  
+
   # Remove the wp test cookie
   set req.http.Cookie = regsuball(req.http.Cookie, "wordpress_test_cookie=[^;]+(; )?", "");
 
   # Remove has_js and Cloudflare/Google Analytics __* cookies.
   set req.http.Cookie = regsuball(req.http.Cookie, "(^|;\s*)(_[_a-z]+|has_js)=[^;]*", "");
-  
+
+  # Yandex metrica cookies
+  set req.http.Cookie = regsuball(req.http.Cookie, "_ym[_a-z0-9]+=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "yabs-sid=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "yp=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "metrics_token=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "yandexuid=[^;]+(; )?", "");
+  set req.http.Cookie = regsuball(req.http.Cookie, "sync_cookie_csrf=[^;]+(; )?", "");
+
+  # Carrotquest cookies
+  set req.http.Cookie = regsuball(req.http.Cookie, "carrotquest[_a-z]+=[^;]+(; )?", "");
+
   # Remove a ";" prefix, if present.
-  set req.http.Cookie = regsub(req.http.Cookie, "^;\s*", "");
-  
+  set req.http.Cookie = regsuball(req.http.Cookie, "^;\s*", "");
+
   # Remove the cloudflare cookie
   set req.http.Cookie = regsuball(req.http.Cookie, "__cfduid=[^;]+(; )?", "");
 
@@ -223,10 +233,6 @@ sub vcl_recv {
   # Normalize the query arguments.
   # Note: Placing this above the "do not cache" section breaks some WP theme elements and admin functionality.
   set req.url = std.querysort(req.url);
-
-  if( req.url ~ "^/$" ) {
-    return (hash);
-  }
 
   # Cache all others requests.
   return (hash);
@@ -253,7 +259,7 @@ sub vcl_backend_response {
     }
 
     # catch obvious reasons we can't cache
-    if (beresp.http.Set-Cookie) {
+    if (beresp.http.Set-Cookie ~ "wordpress_logged_in_") {
         set beresp.ttl = 0s;
     }
 
@@ -270,13 +276,6 @@ sub vcl_backend_response {
         }
         set beresp.uncacheable = true;
         set beresp.ttl = 120s;
-
-    # You are respecting the Cache-Control=private header from the backend
-    } else if (beresp.http.Cache-Control ~ "private") {
-        set beresp.http.X-VC-Cacheable = "NO:Cache-Control=private";
-        set beresp.uncacheable = true;
-        set beresp.ttl = 120s;
-
     # Cache object
     } else if (beresp.http.X-VC-Enabled ~ "true") {
         if (!beresp.http.X-VC-Cacheable) {

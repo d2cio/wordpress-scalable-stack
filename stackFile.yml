@@ -2,7 +2,7 @@ version: '1.0'
 services:
   - name: db
     type: mariadb
-    version: 10.3
+    version: 10.4
     configuration: MasterSlave
     database: wordpress
     username: wordpress
@@ -18,18 +18,9 @@ services:
       - main-one
       - main-two
 
-  - name: cache
-    type: redis
-    version: 4.0
-    remoteAccess: false
-    ports:
-      - 6379
-    deployTo:
-      - edge
-
   - name: blog
     type: php
-    version: 7.1
+    version: 7.2
     source:
       type: download
       url: https://wordpress.org/latest.zip
@@ -94,6 +85,32 @@ services:
       - main-one
       - main-two
 
+  - name: pma
+    type: php
+    version: 7.2
+    source:
+      type: git
+      url: https://github.com/phpmyadmin/phpmyadmin
+      version: STABLE
+    extensions:
+      - mysqli
+      - opcache
+    configFiles:
+      - dest: $MAIN_PATH/config.inc.php
+        src: ./configs/config.inc.php
+    localDeps: composer install
+    deployTo:
+      - edge
+
+  - name: cache
+    type: redis
+    version: 5.0
+    remoteAccess: false
+    ports:
+      - 6379
+    deployTo:
+      - edge
+
   - name: balancer
     type: haproxy
     version: latest
@@ -117,23 +134,6 @@ services:
     configFiles:
       - dest: /etc/varnish/default.vcl
         src: ./configs/default.vcl
-    deployTo:
-      - edge
-
-  - name: pma
-    type: php
-    version: 7.1
-    source:
-      type: git
-      url: https://github.com/phpmyadmin/phpmyadmin
-      version: STABLE
-    extensions:
-      - mysqli
-      - opcache
-    configFiles:
-      - dest: $MAIN_PATH/config.inc.php
-        src: ./configs/config.inc.php
-    localDeps: composer install
     deployTo:
       - edge
 
