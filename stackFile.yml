@@ -48,6 +48,8 @@ services:
         src: ./configs/db-config.php
       - dest: $MAIN_PATH/wp-content/db.php
         src: ./configs/db.php
+      - dest: /usr/local/etc/php/php.ini
+        src: ./configs/php.ini
       - dest: /etc/nginx/conf.d/default.conf
         src: ./configs/default.conf
     localDeps: |
