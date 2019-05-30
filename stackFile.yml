@@ -55,7 +55,7 @@ services:
     localDeps: |
       cmd extract
     initialCommands: |
-      cmd wp core install --url={{=service('varnish').getNginxDomain()}} --title='"$WP_TITLE"' --admin_user='"$WP_ADMIN_USERNAME"' --admin_password='"$WP_ADMIN_PASSWORD"' --admin_email='"$WP_ADMIN_EMAIL"' --path=/var/www/{{=service('blog').get('name')}}
+      cmd wp core install --url={{=service('varnish').getNginxDomain()}} --title='"$WP_TITLE"' --admin_user=$WP_ADMIN_USERNAME --admin_password=$WP_ADMIN_PASSWORD --admin_email=$WP_ADMIN_EMAIL --path=/var/www/{{=service('blog').get('name')}}
       cmd wp plugin install varnish-http-purge --activate --path=/var/www/{{=service('blog').get('name')}}
       cmd wp plugin install redis-cache --activate --path=/var/www/{{=service('blog').get('name')}}
       cmd wp redis enable --path=/var/www/{{=service('blog').get('name')}}
