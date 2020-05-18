@@ -126,7 +126,7 @@ services:
 
   - name: web
     type: nginx
-    version: 1.15
+    version: 1.17
     ports:
       - 80
       - 443
